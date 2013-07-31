@@ -217,6 +217,7 @@ showcommands!    Show git commands while executing them
 F,fetch Fetch from origin before performing local operation
 "
 	local base
+	echo "Starting a feature branch using gitflow, customized for ANX API team"
 
 	# Define flags
 	DEFINE_boolean 'fetch' false 'fetch from origin before performing local operation' F
@@ -251,12 +252,16 @@ F,fetch Fetch from origin before performing local operation
 
 	# create branch
 	git_do checkout -b "$BRANCH" "$base" || die "Could not create feature branch '$BRANCH'."
+	
+	# create branch for the sub-modules
+	git submodule foreach --recursive git checkout -b "$BRANCH" "$base" || die "Could not create feature branch '$BRANCH' for submodules"
 
 	run_post_hook "$NAME" "$ORIGIN" "$BRANCH" "$base"
 
 	echo
 	echo "Summary of actions:"
 	echo "- A new branch '$BRANCH' was created, based on '$base'"
+	echo "  - For each submodule, A new branch '$BRANCH' was created, based on '$base'"
 	echo "- You are now on branch '$(git_current_branch)'"
 	echo ""
 	echo "Now, start committing on your feature. When done, use:"
