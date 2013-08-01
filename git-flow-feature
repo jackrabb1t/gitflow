@@ -206,6 +206,7 @@ parse_remote_name() {
 	BRANCH=$PREFIX$NAME
 }
 
+## Question: Should develop be in sync with origin/develop before creation of new branch?
 cmd_start() {
 	OPTIONS_SPEC="\
 git flow feature start [-h] [-F] <name> [<base>]
@@ -537,34 +538,56 @@ showcommands!    Show git commands while executing them
 	# Parse arguments
 	parse_args "$@"
 
+	echo " \n\n_+_+_+_ Publishing (push) a feature branch using gitflow, customized for ANX API team...  _+_+_+_\n\n"
+
 	name_or_current
 
 	# Sanity checks
 	require_clean_working_tree
 	require_branch "$BRANCH"
 	git_do fetch -q "$ORIGIN" || die "Could not fetch branch '$BRANCH' from remote '$ORIGIN'."
+	git submodule foreach --recursive 'git fetch -q "$ORIGIN" || die "Could not fetch branch $BRANCH for submodule from remote $ORIGIN."'
+
 	require_branch_absent "$ORIGIN/$BRANCH"
+	git submodule foreach --recursive \
+		'. $GIT_FLOW_PATH/gitflow-common require_branch_absent "$ORIGIN/$BRANCH"'
 
 	run_pre_hook "$NAME" "$ORIGIN" "$BRANCH"
 
-	# Create remote branch
-	git_do push "$ORIGIN" "$BRANCH:refs/heads/$BRANCH"
-	git_do fetch -q "$ORIGIN" || die "Could not fetch branch '$BRANCH' from remote '$ORIGIN'."
+	git submodule foreach --recursive git checkout $BRANCH
+	echo " \n\n _+_+_+_ Pushing refs to remote for all submodules  _+_+_+_\n"
+	git submodule foreach --recursive 'git push "$ORIGIN" \
+		refs/heads/`git rev-parse --abbrev-ref HEAD`:refs/remotes/"$ORIGIN"/`git rev-parse --abbrev-ref HEAD`'
 
-	# Configure remote tracking
-	git_do config "branch.$BRANCH.remote" "$ORIGIN"
-	git_do config "branch.$BRANCH.merge" "refs/heads/$BRANCH"
-	git_do checkout "$BRANCH" || die "Could not check out branch '$BRANCH'."
+	echo " \n\n\ _+_+_+_ Pushing branch to remote for all submodules  _+_+_+_\n"
+	git submodule foreach --recursive 'git push "$ORIGIN" `git rev-parse --abbrev-ref HEAD`'
 
+	echo " \n\n _+_+_+_ Pushing branch to remote _+_+_+_\n"
+	publish_action "$ORIGIN" "$BRANCH"
+	
 	run_post_hook "$NAME" "$ORIGIN" "$BRANCH"
 
 	echo
 	echo "Summary of actions:"
-	echo "- A new remote branch '$BRANCH' was created"
-	echo "- The local branch '$BRANCH' was configured to track the remote branch"
+	echo "- Remote branch '$BRANCH' was created/updated for the repo, and each of its submodules"
+	echo "- The local branch '$BRANCH' was configured to track the remote branch for the repo, and each of its submodules"
 	echo "- You are now on branch '$(git_current_branch)'"
 	echo
 }
+
+publish_action() {
+	ORIGIN=$1
+	BRANCH=$2
+	# Create remote branch
+	git_do push -v "$ORIGIN" "$BRANCH:refs/heads/$BRANCH"
+	git_do fetch -q "$ORIGIN" || die "Could not fetch branch '$BRANCH' from remote '$ORIGIN'."
+	# Configure remote tracking
+	git_do config "branch.$BRANCH.remote" "$ORIGIN"
+	git_do config "branch.$BRANCH.merge" "refs/heads/$BRANCH"
+	git_do checkout "$BRANCH" || die "Could not check out branch '$BRANCH'."
+}
+
+
 
 cmd_track() {
 	OPTIONS_SPEC="\
